@@ -44,9 +44,10 @@ rqhhub/
 │       ├── components/    # 通用组件（布局、文件浏览器、文件查看器）
 │       ├── pages/         # 页面（Dashboard、仓库列表、仓库详情、创建仓库）
 │       └── services/      # API 调用封装
-├── start.bat              # Windows 一键启动脚本
-├── start.ps1              # PowerShell 启动脚本
-└── start.sh               # Linux/macOS 启动脚本
+├── .env.example            # 环境配置示例
+├── start.bat              # Windows 本地启动脚本
+├── start.ps1              # PowerShell 本地启动脚本
+└── start.sh               # Linux 公网启动脚本
 ```
 
 ## 快速开始
@@ -56,56 +57,109 @@ rqhhub/
 - **Node.js** (>= 18)
 - **Git**
 
-### 一键启动（Windows）
+### 场景一：Windows 本地部署
 
-双击运行 `start.bat`，脚本会自动安装依赖、初始化示例仓库并启动前后端服务。
+仅在本机访问，前后端均绑定 `localhost`。
 
-### 一键启动（Linux / macOS）
+**一键启动：** 双击 `start.bat`（CMD）或运行 `start.ps1`（PowerShell）
+
+**手动启动：**
+
+```powershell
+# 安装依赖
+npm run install:all
+
+# 设置本地环境变量
+$env:HOST = 'localhost'
+$env:VITE_API_BASE_URL = 'http://localhost:3001/api'
+
+# 启动
+npm run dev
+```
+
+**访问地址：**
+
+| 服务 | 地址 |
+|------|------|
+| 前端界面 | http://localhost:5173 |
+| 后端 API | http://localhost:3001/api |
+| Git HTTP | http://localhost:3001/用户名/仓库名 |
+
+```bash
+# 克隆示例仓库
+git clone http://localhost:3001/root/demo-project
+```
+
+---
+
+### 场景二：Linux 公网服务器部署
+
+对外开放，前后端均绑定 `0.0.0.0`，支持外部访问。
+
+**一键启动：**
 
 ```bash
 chmod +x start.sh
-./start.sh
-```
 
-脚本会自动安装依赖、初始化示例仓库并启动前后端服务，按 `Ctrl+C` 可停止所有服务。
-
-**对外开放（公网/局域网部署）：**
-
-```bash
-# 自动检测局域网 IP，直接运行
+# 自动检测服务器内网 IP
 ./start.sh
 
 # 指定公网 IP（路由器端口转发后使用）
-export HOST_IP=你的公网IP
+export HOST_IP=123.45.67.89
 ./start.sh
 
 # 自定义端口（默认后端3001，前端5173）
 export BACKEND_PORT=8080
 export FRONTEND_PORT=80
 ./start.sh
+
+# 后台运行（不占用终端）
+nohup ./start.sh > server.log 2>&1 &
 ```
 
-> **注意**：公网部署请确保防火墙/安全组已放行对应端口。
-
-### 手动启动
+**手动启动：**
 
 ```bash
-# 1. 安装依赖
+# 安装依赖
 npm run install:all
 
-# 2. 同时启动前后端（开发模式）
+# 设置公网环境变量
+export HOST=0.0.0.0
+export VITE_HOST=0.0.0.0
+export VITE_API_BASE_URL=http://123.45.67.89:3001/api   # ← 替换为你的公网IP
+
+# 启动
 npm run dev
 ```
 
-或分别启动：
+**访问地址（假设公网 IP 为 123.45.67.89）：**
+
+| 服务 | 地址 |
+|------|------|
+| 前端界面 | `http://123.45.67.89:5173` |
+| 后端 API | `http://123.45.67.89:3001/api` |
+| Git HTTP | `http://123.45.67.89:3001/用户名/仓库名` |
 
 ```bash
-# 后端
-npm run dev:backend
-
-# 前端
-npm run dev:frontend
+# 克隆示例仓库（从任意客户端机器）
+git clone http://123.45.67.89:3001/root/demo-project
 ```
+
+> **注意：** 公网部署请确保防火墙/安全组已放行端口 3001 和 5173（或自定义端口）。
+
+---
+
+### 配置参考
+
+完整环境变量说明见 [.env.example](.env.example)，关键配置：
+
+| 环境变量 | 说明 | Windows 本地默认值 | Linux 公网推荐值 |
+|---------|------|-------------------|----------------|
+| `HOST` | 后端监听地址 | `localhost` | `0.0.0.0` |
+| `PORT` | 后端端口 | `3001` | `3001` |
+| `VITE_HOST` | 前端监听地址 | `localhost` | `0.0.0.0` |
+| `VITE_PORT` | 前端端口 | `5173` | `5173` |
+| `VITE_API_BASE_URL` | 前端调用的后端地址 | `http://localhost:3001/api` | `http://<公网IP>:3001/api` |
 
 ### 构建
 
@@ -113,30 +167,18 @@ npm run dev:frontend
 npm run build
 ```
 
-## 服务地址
-
-| 服务 | 地址 |
-|------|------|
-| 前端界面 | `http://<IP>:5173` |
-| 后端 API | `http://<IP>:3001/api` |
-| Git HTTP | `http://<IP>:3001/用户名/仓库名` |
-| 健康检查 | `http://<IP>:3001/api/health` |
-
-> `<IP>` 为服务器局域网或公网 IP，启动脚本会自动检测并显示。
-> 可通过 `export HOST_IP=...` 手动指定。
-
 ## Git 操作示例
 
 ```bash
-# 克隆本地仓库
-git clone http://<服务器IP>:3001/root/demo-project
+# Windows 本地
+git clone http://localhost:3001/root/demo-project
 
-# 推送到本地仓库
-git remote add local http://<服务器IP>:3001/root/my-repo
-git push local master
+# Linux 公网（替换为实际 IP）
+git clone http://123.45.67.89:3001/root/demo-project
 
-# 拉取
-git pull local master
+# 添加远程仓库并推送
+git remote add gitlocal http://<服务器IP>:3001/root/my-repo
+git push gitlocal master
 ```
 
 ## API 概览
