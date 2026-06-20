@@ -45,7 +45,8 @@ rqhhub/
 │       ├── pages/         # 页面（Dashboard、仓库列表、仓库详情、创建仓库）
 │       └── services/      # API 调用封装
 ├── start.bat              # Windows 一键启动脚本
-└── start.ps1              # PowerShell 启动脚本
+├── start.ps1              # PowerShell 启动脚本
+└── start.sh               # Linux/macOS 启动脚本
 ```
 
 ## 快速开始
@@ -58,6 +59,15 @@ rqhhub/
 ### 一键启动（Windows）
 
 双击运行 `start.bat`，脚本会自动安装依赖、初始化示例仓库并启动前后端服务。
+
+### 一键启动（Linux / macOS）
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+脚本会自动安装依赖、初始化示例仓库并启动前后端服务，按 `Ctrl+C` 可停止所有服务。
 
 ### 手动启动
 
