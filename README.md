@@ -69,6 +69,24 @@ chmod +x start.sh
 
 脚本会自动安装依赖、初始化示例仓库并启动前后端服务，按 `Ctrl+C` 可停止所有服务。
 
+**对外开放（公网/局域网部署）：**
+
+```bash
+# 自动检测局域网 IP，直接运行
+./start.sh
+
+# 指定公网 IP（路由器端口转发后使用）
+export HOST_IP=你的公网IP
+./start.sh
+
+# 自定义端口（默认后端3001，前端5173）
+export BACKEND_PORT=8080
+export FRONTEND_PORT=80
+./start.sh
+```
+
+> **注意**：公网部署请确保防火墙/安全组已放行对应端口。
+
 ### 手动启动
 
 ```bash
@@ -99,19 +117,22 @@ npm run build
 
 | 服务 | 地址 |
 |------|------|
-| 前端界面 | http://localhost:5173 |
-| 后端 API | http://localhost:3001/api |
-| Git HTTP | http://localhost:3001/用户名/仓库名 |
-| 健康检查 | http://localhost:3001/api/health |
+| 前端界面 | `http://<IP>:5173` |
+| 后端 API | `http://<IP>:3001/api` |
+| Git HTTP | `http://<IP>:3001/用户名/仓库名` |
+| 健康检查 | `http://<IP>:3001/api/health` |
+
+> `<IP>` 为服务器局域网或公网 IP，启动脚本会自动检测并显示。
+> 可通过 `export HOST_IP=...` 手动指定。
 
 ## Git 操作示例
 
 ```bash
 # 克隆本地仓库
-git clone http://localhost:3001/root/demo-project
+git clone http://<服务器IP>:3001/root/demo-project
 
 # 推送到本地仓库
-git remote add local http://localhost:3001/root/my-repo
+git remote add local http://<服务器IP>:3001/root/my-repo
 git push local master
 
 # 拉取

@@ -24,8 +24,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // 启动服务器
-app.listen(PORT, () => {
-  console.log(`后端服务器运行在 http://localhost:${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`后端服务器运行在 http://${HOST}:${PORT}`);
 });
 
 export default app;
