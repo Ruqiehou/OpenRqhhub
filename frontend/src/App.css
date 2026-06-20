@@ -747,6 +747,14 @@ body {
 .commit-meta {
   font-size: 12px;
   color: var(--text-light);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.commit-date {
+  margin-left: 4px;
 }
 
 .commit-hash {

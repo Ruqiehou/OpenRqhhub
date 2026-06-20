@@ -182,7 +182,10 @@ const RepositoryDetail: React.FC = () => {
                   <div key={i} className="commit-item">
                     <div className="commit-info">
                       <div className="commit-message">{c.message}</div>
-                      <div className="commit-meta"><span>{c.author_name}</span><span> {new Date(c.date).toLocaleDateString()}</span></div>
+                      <div className="commit-meta">
+                        <span>{c.author_name}</span>
+                        <span className="commit-date"> {new Date(c.date).toLocaleDateString()}</span>
+                      </div>
                     </div>
                     <div className="commit-hash">{c.hash.substring(0, 7)}</div>
                   </div>
