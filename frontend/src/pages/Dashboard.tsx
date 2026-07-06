@@ -1,30 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { repositoryApi } from '../services/api';
-
-interface Repository {
-  name: string;
-  path: string;
-  currentBranch: string;
-  branches: string[];
-  lastCommit: any;
-  totalCommits: number;
-  status: {
-    modified: string[];
-    notAdded: string[];
-    deleted: string[];
-    created: string[];
-  };
-}
-
-interface Stats {
-  totalRepositories: number;
-  repositories: string[];
-}
+import type { RepositoryInfo, RepositoryStats } from '../services/api';
 
 const Dashboard: React.FC = () => {
-  const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [repositories, setRepositories] = useState<RepositoryInfo[]>([]);
+  const [stats, setStats] = useState<RepositoryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,10 +24,10 @@ const Dashboard: React.FC = () => {
         repositoryApi.getStats()
       ]);
       
-      setRepositories((reposResponse as any).data.repositories);
-      setStats((statsResponse as any).data);
-    } catch (err: any) {
-      setError(err.message || '加载数据失败');
+      setRepositories(reposResponse.data.repositories);
+      setStats(statsResponse.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载数据失败');
     } finally {
       setLoading(false);
     }

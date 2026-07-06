@@ -1,7 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { gitService } from '../services/git';
+import { gitService, HttpError } from '../services/git';
 
 const router = Router();
+
+function sendError(res: Response, error: unknown): void {
+  const statusCode = error instanceof HttpError ? error.statusCode : 500;
+  const message = error instanceof Error ? error.message : '服务器内部错误';
+  res.status(statusCode).json({ success: false, error: message });
+}
 
 /**
  * 获取仓库列表（带分页）
@@ -40,8 +46,8 @@ router.get('/', async (req: Request, res: Response) => {
         }
       }
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -62,8 +68,8 @@ router.get('/search', async (req: Request, res: Response) => {
     );
     
     res.json({ success: true, data: filteredRepos });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -81,8 +87,8 @@ router.get('/stats', async (req: Request, res: Response) => {
     };
     
     res.json({ success: true, data: stats });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 

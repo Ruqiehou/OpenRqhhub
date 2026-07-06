@@ -1,7 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { gitService } from '../services/git';
+import { gitService, HttpError } from '../services/git';
 
 const router = Router();
+
+function sendError(res: Response, error: unknown): void {
+  const statusCode = error instanceof HttpError ? error.statusCode : 500;
+  const message = error instanceof Error ? error.message : '服务器内部错误';
+  res.status(statusCode).json({ success: false, error: message });
+}
 
 /**
  * 获取所有仓库列表
@@ -10,8 +16,8 @@ router.get('/repositories', async (req: Request, res: Response) => {
   try {
     const repositories = await gitService.listRepositories();
     res.json({ success: true, data: repositories });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -28,8 +34,8 @@ router.post('/repositories', async (req: Request, res: Response) => {
     
     const repoPath = await gitService.createRepository(name, description);
     res.json({ success: true, data: { name, path: repoPath } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -47,8 +53,8 @@ router.get('/repositories/:repoName', async (req: Request, res: Response) => {
     
     const info = await gitService.getRepositoryInfo(repoName);
     res.json({ success: true, data: info });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -60,8 +66,8 @@ router.delete('/repositories/:repoName', async (req: Request, res: Response) => 
     const repoName = req.params.repoName as string;
     await gitService.deleteRepository(repoName);
     res.json({ success: true, message: '仓库已删除' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -73,8 +79,8 @@ router.get('/repositories/:repoName/status', async (req: Request, res: Response)
     const repoName = req.params.repoName as string;
     const status = await gitService.getStatus(repoName);
     res.json({ success: true, data: status });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -87,8 +93,8 @@ router.get('/repositories/:repoName/log', async (req: Request, res: Response) =>
     const { maxCount } = req.query;
     const log = await gitService.getLog(repoName, maxCount ? parseInt(maxCount as string) : 50);
     res.json({ success: true, data: log });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -101,8 +107,8 @@ router.get('/repositories/:repoName/files', async (req: Request, res: Response) 
     const { path: dirPath } = req.query;
     const files = await gitService.getFiles(repoName, dirPath as string || '');
     res.json({ success: true, data: files });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -120,8 +126,8 @@ router.get('/repositories/:repoName/file', async (req: Request, res: Response) =
     
     const content = await gitService.getFileContent(repoName, filePath as string);
     res.json({ success: true, data: { content, path: filePath } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -133,8 +139,8 @@ router.get('/repositories/:repoName/branches', async (req: Request, res: Respons
     const repoName = req.params.repoName as string;
     const branches = await gitService.getBranches(repoName);
     res.json({ success: true, data: branches });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -152,8 +158,8 @@ router.post('/repositories/:repoName/branches', async (req: Request, res: Respon
     
     await gitService.createBranch(repoName, branchName);
     res.json({ success: true, message: '分支已创建' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -166,8 +172,8 @@ router.put('/repositories/:repoName/branches/:branchName', async (req: Request, 
     const branchName = req.params.branchName as string;
     await gitService.switchBranch(repoName, branchName);
     res.json({ success: true, message: '分支已切换' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -185,8 +191,8 @@ router.post('/repositories/:repoName/add', async (req: Request, res: Response) =
     
     await gitService.addFiles(repoName, files);
     res.json({ success: true, message: '文件已添加到暂存区' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -204,8 +210,8 @@ router.post('/repositories/:repoName/commit', async (req: Request, res: Response
     
     await gitService.commit(repoName, message);
     res.json({ success: true, message: '更改已提交' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -222,8 +228,8 @@ router.post('/clone', async (req: Request, res: Response) => {
     
     const repoPath = await gitService.cloneRepository(url, name);
     res.json({ success: true, data: { path: repoPath } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -241,8 +247,8 @@ router.post('/repositories/:repoName/remotes', async (req: Request, res: Respons
     
     await gitService.addRemote(repoName, name, url);
     res.json({ success: true, message: '远程仓库已添加' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -254,8 +260,8 @@ router.get('/repositories/:repoName/remotes', async (req: Request, res: Response
     const repoName = req.params.repoName as string;
     const remotes = await gitService.getRemotes(repoName);
     res.json({ success: true, data: remotes });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -269,8 +275,8 @@ router.post('/repositories/:repoName/push', async (req: Request, res: Response) 
     
     await gitService.push(repoName, remote, branch);
     res.json({ success: true, message: '推送成功' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -284,8 +290,8 @@ router.post('/repositories/:repoName/pull', async (req: Request, res: Response) 
     
     await gitService.pull(repoName, remote, branch);
     res.json({ success: true, message: '拉取成功' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -303,8 +309,8 @@ router.post('/repositories/:repoName/quick-push', async (req: Request, res: Resp
     
     await gitService.quickCommitAndPush(repoName, message, remote, branch);
     res.json({ success: true, message: '快速提交并推送成功' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -318,8 +324,8 @@ router.post('/repositories/:repoName/quick-pull', async (req: Request, res: Resp
     
     await gitService.quickPullAndMerge(repoName, remote, branch);
     res.json({ success: true, message: '快速拉取并合并成功' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -337,8 +343,8 @@ router.post('/repositories/:repoName/config', async (req: Request, res: Response
     
     await gitService.setConfig(repoName, key, value);
     res.json({ success: true, message: '配置已设置' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -356,8 +362,8 @@ router.get('/repositories/:repoName/config', async (req: Request, res: Response)
     
     const value = await gitService.getConfig(repoName, key as string);
     res.json({ success: true, data: { key, value } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 

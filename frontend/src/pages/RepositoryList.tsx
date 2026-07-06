@@ -1,24 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { repositoryApi, gitApi } from '../services/api';
-
-interface Repository {
-  name: string;
-  path: string;
-  currentBranch: string;
-  branches: string[];
-  lastCommit: any;
-  totalCommits: number;
-  status: {
-    modified: string[];
-    notAdded: string[];
-    deleted: string[];
-    created: string[];
-  };
-}
+import type { RepositoryInfo } from '../services/api';
 
 const RepositoryList: React.FC = () => {
-  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [repositories, setRepositories] = useState<RepositoryInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,12 +21,12 @@ const RepositoryList: React.FC = () => {
       setError(null);
       
       const response = await repositoryApi.getRepositories(currentPage, 10);
-      const data = (response as any).data;
+      const data = response.data;
       
       setRepositories(data.repositories);
       setTotalPages(data.pagination.totalPages);
-    } catch (err: any) {
-      setError(err.message || '加载仓库列表失败');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载仓库列表失败');
     } finally {
       setLoading(false);
     }
@@ -55,10 +41,18 @@ const RepositoryList: React.FC = () => {
     try {
       setLoading(true);
       const response = await repositoryApi.searchRepositories(searchQuery);
-      const data = (response as any).data;
-      setRepositories(data.map((name: string) => ({ name })));
-    } catch (err: any) {
-      setError(err.message || '搜索失败');
+      const data = response.data;
+      setRepositories(data.map((name) => ({
+        name,
+        path: '',
+        currentBranch: '',
+        branches: [],
+        lastCommit: null,
+        totalCommits: 0,
+        status: { modified: [], notAdded: [], deleted: [], created: [] },
+      })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '搜索失败');
     } finally {
       setLoading(false);
     }
@@ -72,8 +66,8 @@ const RepositoryList: React.FC = () => {
     try {
       await gitApi.deleteRepository(repoName);
       loadRepositories();
-    } catch (err: any) {
-      setError(err.message || '删除仓库失败');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除仓库失败');
     }
   };
 

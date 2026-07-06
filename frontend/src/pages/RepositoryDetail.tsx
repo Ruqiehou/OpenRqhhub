@@ -1,51 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { gitApi } from '../services/api';
+import type { GitCommit, RemoteInfo, RepositoryInfo } from '../services/api';
 import FileExplorer from '../components/FileExplorer';
 import type { FileItem } from '../components/FileExplorer';
 import FileViewer from '../components/FileViewer';
 
-interface RepositoryInfo {
-  name: string;
-  path: string;
-  currentBranch: string;
-  branches: string[];
-  lastCommit: any;
-  totalCommits: number;
-  status: {
-    modified: string[];
-    notAdded: string[];
-    deleted: string[];
-    created: string[];
-  };
-}
-
-interface Commit {
-  hash: string;
-  date: string;
-  message: string;
-  author_name: string;
-  author_email: string;
-}
-
-interface Remote {
-  name: string;
-  refs: {
-    fetch: string;
-    push: string;
-  };
-}
-
 const RepositoryDetail: React.FC = () => {
   const { repoName } = useParams<{ repoName: string }>();
   const [repoInfo, setRepoInfo] = useState<RepositoryInfo | null>(null);
-  const [commits, setCommits] = useState<Commit[]>([]);
+  const [commits, setCommits] = useState<GitCommit[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [currentPath, setCurrentPath] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('files');
-  const [remotes, setRemotes] = useState<Remote[]>([]);
+  const [remotes, setRemotes] = useState<RemoteInfo[]>([]);
   const [quickCommitMessage, setQuickCommitMessage] = useState('');
   const [quickOperationLoading, setQuickOperationLoading] = useState(false);
   const [viewingFile, setViewingFile] = useState<string | null>(null);
@@ -64,14 +34,14 @@ const RepositoryDetail: React.FC = () => {
         gitApi.getRepositoryInfo(repoName!),
         gitApi.getLog(repoName!, 20),
         gitApi.getFiles(repoName!, currentPath),
-        gitApi.getRemotes(repoName!).catch(() => ({ data: [] }))
+        gitApi.getRemotes(repoName!).catch(() => ({ success: true, data: [] }))
       ]);
-      setRepoInfo((infoRes as any).data);
-      setCommits((logRes as any).data.all);
-      setFiles((filesRes as any).data);
-      setRemotes((remotesRes as any).data || []);
-    } catch (err: any) {
-      setError(err.message || '加载仓库信息失败');
+      setRepoInfo(infoRes.data);
+      setCommits(logRes.data.all);
+      setFiles(filesRes.data);
+      setRemotes(remotesRes.data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载仓库信息失败');
     } finally { setLoading(false); }
   };
 
@@ -79,19 +49,19 @@ const RepositoryDetail: React.FC = () => {
     try {
       setCurrentPath(dirPath);
       const res = await gitApi.getFiles(repoName!, dirPath);
-      setFiles((res as any).data);
+      setFiles(res.data);
       setViewingFile(null);
-    } catch (err: any) { console.error(err); }
+    } catch (err) { console.error(err); }
   };
 
   const openFile = async (filePath: string) => {
     try {
       setFileLoading(true);
       const res = await gitApi.getFileContent(repoName!, filePath);
-      setFileContent((res as any).data.content);
+      setFileContent(res.data.content);
       setViewingFile(filePath);
-    } catch (err: any) {
-      setError('加载文件失败: ' + (err.message || ''));
+    } catch (err) {
+      setError('加载文件失败: ' + (err instanceof Error ? err.message : ''));
     } finally { setFileLoading(false); }
   };
 
@@ -101,28 +71,28 @@ const RepositoryDetail: React.FC = () => {
   const handleCreateBranch = async () => {
     const name = prompt('请输入新分支名称:');
     if (!name) return;
-    try { await gitApi.createBranch(repoName!, name); loadRepositoryData(); } catch (err: any) { setError(err.message); }
+    try { await gitApi.createBranch(repoName!, name); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '创建分支失败'); }
   };
   const handleSwitchBranch = async (branchName: string) => {
-    try { await gitApi.switchBranch(repoName!, branchName); loadRepositoryData(); } catch (err: any) { setError(err.message); }
+    try { await gitApi.switchBranch(repoName!, branchName); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '切换分支失败'); }
   };
   const handleAddRemote = async () => {
     const name = prompt('远程仓库名称:'); if (!name) return;
     const url = prompt('远程仓库URL:'); if (!url) return;
-    try { await gitApi.addRemote(repoName!, name, url); loadRepositoryData(); } catch (err: any) { setError(err.message); }
+    try { await gitApi.addRemote(repoName!, name, url); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '添加远程仓库失败'); }
   };
   const handleQuickPush = async () => {
     if (!quickCommitMessage.trim()) { setError('请输入提交信息'); return; }
-    try { setQuickOperationLoading(true); await gitApi.quickPush(repoName!, quickCommitMessage); setQuickCommitMessage(''); loadRepositoryData(); } catch (err: any) { setError(err.message); } finally { setQuickOperationLoading(false); }
+    try { setQuickOperationLoading(true); await gitApi.quickPush(repoName!, quickCommitMessage); setQuickCommitMessage(''); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '快速推送失败'); } finally { setQuickOperationLoading(false); }
   };
   const handleQuickPull = async () => {
-    try { setQuickOperationLoading(true); await gitApi.quickPull(repoName!); loadRepositoryData(); } catch (err: any) { setError(err.message); } finally { setQuickOperationLoading(false); }
+    try { setQuickOperationLoading(true); await gitApi.quickPull(repoName!); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '快速拉取失败'); } finally { setQuickOperationLoading(false); }
   };
   const handlePush = async () => {
-    try { setQuickOperationLoading(true); await gitApi.push(repoName!); loadRepositoryData(); } catch (err: any) { setError(err.message); } finally { setQuickOperationLoading(false); }
+    try { setQuickOperationLoading(true); await gitApi.push(repoName!); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '推送失败'); } finally { setQuickOperationLoading(false); }
   };
   const handlePull = async () => {
-    try { setQuickOperationLoading(true); await gitApi.pull(repoName!); loadRepositoryData(); } catch (err: any) { setError(err.message); } finally { setQuickOperationLoading(false); }
+    try { setQuickOperationLoading(true); await gitApi.pull(repoName!); loadRepositoryData(); } catch (err) { setError(err instanceof Error ? err.message : '拉取失败'); } finally { setQuickOperationLoading(false); }
   };
 
   if (loading) return <div className="loading">加载中...</div>;

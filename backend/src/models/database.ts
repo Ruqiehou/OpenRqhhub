@@ -2,8 +2,10 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
+const BACKEND_ROOT = path.resolve(__dirname, '../..');
+
 // 数据库文件路径
-const DB_PATH = path.resolve('./data/gitlocal.db');
+const DB_PATH = path.join(BACKEND_ROOT, 'data', 'gitlocal.db');
 
 let db: Database.Database;
 

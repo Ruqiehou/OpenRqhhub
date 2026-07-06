@@ -1,8 +1,47 @@
 import simpleGit, { StatusResult, LogResult } from 'simple-git';
 import path from 'path';
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, type ExecSyncOptionsWithStringEncoding } from 'child_process';
 import RepositoryModel from '../models/repository';
+
+export class HttpError extends Error {
+  constructor(public statusCode: number, message: string) {
+    super(message);
+  }
+}
+
+export interface GitCommitInfo {
+  hash: string;
+  message: string;
+  author_name: string;
+  author_email: string;
+  date: string;
+}
+
+export interface RepositoryInfo {
+  name: string;
+  path: string;
+  currentBranch: string;
+  branches: string[];
+  lastCommit: GitCommitInfo | null;
+  totalCommits: number;
+  description: string;
+  created_at: string | null;
+  status: { modified: string[]; notAdded: string[]; deleted: string[]; created: string[] };
+}
+
+export interface RemoteInfo {
+  name: string;
+  refs?: {
+    fetch?: string;
+    push?: string;
+  };
+}
+
+export interface RemoteUrlInfo {
+  name: string;
+  url: string;
+}
 
 export class GitService {
   private basePath: string;
@@ -12,8 +51,26 @@ export class GitService {
     if (!fs.existsSync(this.basePath)) fs.mkdirSync(this.basePath, { recursive: true });
   }
 
+  static isValidRepositoryName(repoName: string): boolean {
+    return /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(repoName) &&
+      !repoName.includes('..') &&
+      !repoName.endsWith('.lock');
+  }
+
+  private assertRepositoryName(repoName: string): void {
+    if (!GitService.isValidRepositoryName(repoName)) {
+      throw new HttpError(400, '仓库名称只能包含字母、数字、点、下划线和连字符，且不能包含路径片段');
+    }
+  }
+
   private getRepoPath(repoName: string): string {
-    return path.join(this.basePath, repoName);
+    this.assertRepositoryName(repoName);
+    const repoPath = path.resolve(this.basePath, repoName);
+    const relativePath = path.relative(this.basePath, repoPath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      throw new HttpError(400, '仓库路径非法');
+    }
+    return repoPath;
   }
 
   /** bare 仓库检测：检查是否存在 HEAD 文件 */
@@ -32,7 +89,7 @@ export class GitService {
 
   /** git plumbing 命令执行 */
   private gitExec(cwd: string, args: string[], stdin?: string): string {
-    const opts: any = { cwd, encoding: 'utf-8' as BufferEncoding };
+    const opts: ExecSyncOptionsWithStringEncoding = { cwd, encoding: 'utf-8' };
     if (stdin !== undefined) opts.input = stdin;
     return execSync(`git ${args.map(a => `"${a}"`).join(' ')}`, opts).toString().trim();
   }
@@ -40,7 +97,7 @@ export class GitService {
   /** 创建 bare 仓库 */
   async createRepository(repoName: string, description?: string): Promise<string> {
     const repoPath = this.getRepoPath(repoName);
-    if (fs.existsSync(repoPath)) throw new Error('仓库 ' + repoName + ' 已存在');
+    if (fs.existsSync(repoPath)) throw new HttpError(409, '仓库 ' + repoName + ' 已存在');
     fs.mkdirSync(repoPath, { recursive: true });
 
     const git = simpleGit(repoPath);
@@ -77,7 +134,7 @@ export class GitService {
     return log;
   }
 
-  private async syncCommitsToDb(repoName: string, commits: readonly any[]): Promise<void> {
+  private async syncCommitsToDb(repoName: string, commits: readonly GitCommitInfo[]): Promise<void> {
     const repo = RepositoryModel.findByName(repoName);
     if (!repo) return;
     for (const c of commits) {
@@ -116,7 +173,7 @@ export class GitService {
   async getFileContent(repoName: string, filePath: string): Promise<string> {
     try {
       return this.gitExec(this.getRepoPath(repoName), ['show', 'HEAD:' + filePath]);
-    } catch { throw new Error('文件 ' + filePath + ' 不存在或非文本文件'); }
+    } catch { throw new HttpError(404, '文件 ' + filePath + ' 不存在或非文本文件'); }
   }
 
   /** 获取分支列表 */
@@ -175,7 +232,7 @@ export class GitService {
   }
 
   /** 获取仓库信息 */
-  async getRepositoryInfo(repoName: string): Promise<any> {
+  async getRepositoryInfo(repoName: string): Promise<RepositoryInfo> {
     const repoPath = this.getRepoPath(repoName);
     const git = simpleGit(repoPath);
     const [log, branches] = await Promise.all([git.log({ maxCount: 10 }), git.branchLocal()]);
@@ -231,7 +288,7 @@ export class GitService {
   /** 删除仓库 */
   async deleteRepository(repoName: string): Promise<void> {
     const repoPath = this.getRepoPath(repoName);
-    if (!fs.existsSync(repoPath)) throw new Error('仓库 ' + repoName + ' 不存在');
+    if (!fs.existsSync(repoPath)) throw new HttpError(404, '仓库 ' + repoName + ' 不存在');
     fs.rmSync(repoPath, { recursive: true, force: true });
     RepositoryModel.deleteByName(repoName);
   }
@@ -239,8 +296,9 @@ export class GitService {
   /** 克隆远程仓库（bare） */
   async cloneRepository(url: string, repoName?: string): Promise<string> {
     const name = repoName || url.split('/').pop()?.replace('.git', '') || 'cloned-repo';
+    this.assertRepositoryName(name);
     const repoPath = this.getRepoPath(name);
-    if (fs.existsSync(repoPath)) throw new Error('仓库 ' + name + ' 已存在');
+    if (fs.existsSync(repoPath)) throw new HttpError(409, '仓库 ' + name + ' 已存在');
 
     const git = simpleGit();
     await git.clone(url, repoPath, ['--bare']);
@@ -264,7 +322,7 @@ export class GitService {
   }
 
   /** 获取远程列表 */
-  async getRemotes(repoName: string): Promise<any[]> {
+  async getRemotes(repoName: string): Promise<RemoteInfo[]> {
     const git = simpleGit(this.getRepoPath(repoName));
     const remotes = await git.getRemotes(true);
     const repo = RepositoryModel.findByName(repoName);
@@ -287,7 +345,7 @@ export class GitService {
   }
 
   /** 获取远程信息 */
-  async getRemoteInfo(repoName: string, remote: string = 'origin'): Promise<any> {
+  async getRemoteInfo(repoName: string, remote: string = 'origin'): Promise<RemoteUrlInfo | null> {
     const git = simpleGit(this.getRepoPath(repoName));
     try { const url = await git.remote(['get-url', remote]); return { name: remote, url: (url || '').trim() }; }
     catch { return null; }
@@ -305,19 +363,10 @@ export class GitService {
     return Array.isArray(v) ? v[0] : (v || '');
   }
 
-  /** 快速提交并推送 */
+  /** 快速推送：bare 仓库没有工作区，不在服务端伪造提交 */
   async quickCommitAndPush(repoName: string, message: string, remote: string = 'origin', branch?: string): Promise<void> {
-    const repoPath = this.getRepoPath(repoName);
-    const treeHash = this.gitExec(repoPath, ['write-tree']);
-    try {
-      const parentHash = this.gitExec(repoPath, ['rev-parse', 'HEAD']);
-      const commitHash = this.gitExec(repoPath, ['commit-tree', treeHash, '-p', parentHash, '-m', message]);
-      this.gitExec(repoPath, ['update-ref', 'HEAD', commitHash]);
-      const git = simpleGit(repoPath);
-      if (branch) await git.push(remote, branch); else await git.push(remote);
-      const repo = RepositoryModel.findByName(repoName);
-      if (repo) RepositoryModel.addCommit(repo.id, commitHash, message, '', '', new Date().toISOString());
-    } catch { /* no parent, first commit */ }
+    if (!message.trim()) throw new HttpError(400, '提交信息不能为空');
+    await this.push(repoName, remote, branch);
   }
 
   /** 快速拉取 */
@@ -329,7 +378,7 @@ export class GitService {
   }
 
   /** 统计信息 */
-  async getRepositoryStats(): Promise<any> {
+  async getRepositoryStats(): Promise<{ totalRepositories: number; repositories: string[]; details: Array<{ id: number; name: string; description: string; default_branch: string; created_at: string; updated_at: string }> }> {
     const repos = RepositoryModel.findAll();
     return {
       totalRepositories: repos.length,

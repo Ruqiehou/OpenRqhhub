@@ -23,8 +23,8 @@ const CreateRepository: React.FC = () => {
       
       await gitApi.createRepository(name.trim(), description.trim());
       navigate('/repositories');
-    } catch (err: any) {
-      setError(err.message || '创建仓库失败');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建仓库失败');
     } finally {
       setLoading(false);
     }

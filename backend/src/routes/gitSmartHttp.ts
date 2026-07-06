@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import { spawnSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import express from 'express';
+import { GitService } from '../services/git';
 
 const router = Router();
 
+const BACKEND_ROOT = path.resolve(__dirname, '../..');
+
 // Git 仓库存储根目录
-const REPOS_BASE = path.resolve('./repositories');
+const REPOS_BASE = path.join(BACKEND_ROOT, 'repositories');
 
 /**
  * 收集请求 body 原始 buffer
@@ -24,6 +26,18 @@ function collectBody(req: Request): Promise<Buffer> {
 /**
  * 执行 git http-backend 并返回结果
  */
+function resolveSmartHttpRepo(username: string, repo: string): { repoName: string; repoPath: string } | null {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(username) || !GitService.isValidRepositoryName(repo)) return null;
+
+  const namespacedName = `${username}_${repo}`;
+  const repoName = fs.existsSync(path.join(REPOS_BASE, namespacedName)) ? namespacedName : repo;
+  const repoPath = path.resolve(REPOS_BASE, repoName);
+  const relativePath = path.relative(REPOS_BASE, repoPath);
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return null;
+
+  return { repoName, repoPath };
+}
+
 function executeGitBackend(
   method: string,
   pathInfo: string,
@@ -105,8 +119,9 @@ function executeGitBackend(
  * GET /:username/:repo/info/refs?service=git-receive-pack (push)
  */
 router.get('/:username/:repo/info/refs', (req: Request, res: Response) => {
-  const repoName = req.params.repo as string;
-  const repoPath = path.join(REPOS_BASE, repoName);
+  const resolved = resolveSmartHttpRepo(req.params.username as string, req.params.repo as string);
+  if (!resolved) return res.status(400).send('Invalid repository path');
+  const { repoName, repoPath } = resolved;
   
   // 检查仓库是否存在
   if (!fs.existsSync(repoPath)) {
@@ -139,8 +154,9 @@ router.get('/:username/:repo/info/refs', (req: Request, res: Response) => {
  * POST /:username/:repo/git-receive-pack
  */
 router.post('/:username/:repo/git-receive-pack', async (req: Request, res: Response) => {
-  const repoName = req.params.repo as string;
-  const repoPath = path.join(REPOS_BASE, repoName);
+  const resolved = resolveSmartHttpRepo(req.params.username as string, req.params.repo as string);
+  if (!resolved) return res.status(400).send('Invalid repository path');
+  const { repoName, repoPath } = resolved;
   
   if (!fs.existsSync(repoPath)) {
     return res.status(404).send('Repository not found');
@@ -170,8 +186,9 @@ router.post('/:username/:repo/git-receive-pack', async (req: Request, res: Respo
  * POST /:username/:repo/git-upload-pack
  */
 router.post('/:username/:repo/git-upload-pack', async (req: Request, res: Response) => {
-  const repoName = req.params.repo as string;
-  const repoPath = path.join(REPOS_BASE, repoName);
+  const resolved = resolveSmartHttpRepo(req.params.username as string, req.params.repo as string);
+  if (!resolved) return res.status(400).send('Invalid repository path');
+  const { repoName, repoPath } = resolved;
   
   if (!fs.existsSync(repoPath)) {
     return res.status(404).send('Repository not found');

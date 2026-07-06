@@ -1,7 +1,74 @@
 import axios from 'axios';
+import type { FileItem } from '../components/FileExplorer';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
   ?? `http://${window.location.hostname}:3001/api`;
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  error?: string;
+}
+
+export interface GitCommit {
+  hash: string;
+  date: string;
+  message: string;
+  author_name: string;
+  author_email: string;
+}
+
+export interface GitLog {
+  all: GitCommit[];
+  latest: GitCommit | null;
+  total: number;
+}
+
+export interface RepositoryInfo {
+  name: string;
+  path: string;
+  currentBranch: string;
+  branches: string[];
+  lastCommit: GitCommit | null;
+  totalCommits: number;
+  description?: string;
+  created_at?: string | null;
+  status: {
+    modified: string[];
+    notAdded: string[];
+    deleted: string[];
+    created: string[];
+  };
+}
+
+export interface RemoteInfo {
+  name: string;
+  refs?: {
+    fetch?: string;
+    push?: string;
+  };
+}
+
+export interface RepositoryListData {
+  repositories: RepositoryInfo[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface RepositoryStats {
+  totalRepositories: number;
+  repositories: string[];
+}
+
+export interface FileContentData {
+  content: string;
+  path: string;
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -11,130 +78,78 @@ const api = axios.create({
   },
 });
 
-// 请求拦截器
-api.interceptors.request.use(
-  (config) => {
-    // 可以在这里添加认证token等
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// 响应拦截器
 api.interceptors.response.use(
-  (response) => {
-    return response.data;
-  },
+  (response) => response.data,
   (error) => {
     console.error('API Error:', error);
     return Promise.reject(error);
   }
 );
 
-// Git相关API
+const get = <T>(url: string, config?: Parameters<typeof api.get>[1]) =>
+  api.get<unknown, ApiResponse<T>>(url, config);
+
+const post = <T>(url: string, data?: unknown, config?: Parameters<typeof api.post>[2]) =>
+  api.post<unknown, ApiResponse<T>>(url, data, config);
+
+const put = <T>(url: string, data?: unknown, config?: Parameters<typeof api.put>[2]) =>
+  api.put<unknown, ApiResponse<T>>(url, data, config);
+
+const del = <T>(url: string, config?: Parameters<typeof api.delete>[1]) =>
+  api.delete<unknown, ApiResponse<T>>(url, config);
+
 export const gitApi = {
-  // 获取所有仓库
-  getRepositories: () => api.get('/git/repositories'),
-  
-  // 创建新仓库
-  createRepository: (name: string, description?: string) => 
-    api.post('/git/repositories', { name, description }),
-  
-  // 获取仓库信息
-  getRepositoryInfo: (repoName: string) => 
-    api.get(`/git/repositories/${repoName}`),
-  
-  // 删除仓库
-  deleteRepository: (repoName: string) => 
-    api.delete(`/git/repositories/${repoName}`),
-  
-  // 获取仓库状态
-  getStatus: (repoName: string) => 
-    api.get(`/git/repositories/${repoName}/status`),
-  
-  // 获取提交历史
-  getLog: (repoName: string, maxCount?: number) => 
-    api.get(`/git/repositories/${repoName}/log`, { params: { maxCount } }),
-  
-  // 获取文件列表
-  getFiles: (repoName: string, dirPath?: string) => 
-    api.get(`/git/repositories/${repoName}/files`, { params: { path: dirPath } }),
-  
-  // 获取文件内容
-  getFileContent: (repoName: string, filePath: string) => 
-    api.get(`/git/repositories/${repoName}/file`, { params: { path: filePath } }),
-  
-  // 获取分支列表
-  getBranches: (repoName: string) => 
-    api.get(`/git/repositories/${repoName}/branches`),
-  
-  // 创建新分支
-  createBranch: (repoName: string, branchName: string) => 
-    api.post(`/git/repositories/${repoName}/branches`, { branchName }),
-  
-  // 切换分支
-  switchBranch: (repoName: string, branchName: string) => 
-    api.put(`/git/repositories/${repoName}/branches/${branchName}`),
-  
-  // 添加文件到暂存区
-  addFiles: (repoName: string, files: string[]) => 
-    api.post(`/git/repositories/${repoName}/add`, { files }),
-  
-  // 提交更改
-  commit: (repoName: string, message: string) => 
-    api.post(`/git/repositories/${repoName}/commit`, { message }),
-  
-  // 克隆远程仓库
-  cloneRepository: (url: string, name?: string) => 
-    api.post('/git/clone', { url, name }),
-  
-  // 添加远程仓库
-  addRemote: (repoName: string, name: string, url: string) => 
-    api.post(`/git/repositories/${repoName}/remotes`, { name, url }),
-  
-  // 获取远程仓库列表
-  getRemotes: (repoName: string) => 
-    api.get(`/git/repositories/${repoName}/remotes`),
-  
-  // 推送到远程仓库
-  push: (repoName: string, remote?: string, branch?: string) => 
-    api.post(`/git/repositories/${repoName}/push`, { remote, branch }),
-  
-  // 从远程仓库拉取
-  pull: (repoName: string, remote?: string, branch?: string) => 
-    api.post(`/git/repositories/${repoName}/pull`, { remote, branch }),
-  
-  // 快速提交并推送
-  quickPush: (repoName: string, message: string, remote?: string, branch?: string) => 
-    api.post(`/git/repositories/${repoName}/quick-push`, { message, remote, branch }),
-  
-  // 快速拉取并合并
-  quickPull: (repoName: string, remote?: string, branch?: string) => 
-    api.post(`/git/repositories/${repoName}/quick-pull`, { remote, branch }),
-  
-  // 设置Git配置
-  setConfig: (repoName: string, key: string, value: string) => 
-    api.post(`/git/repositories/${repoName}/config`, { key, value }),
-  
-  // 获取Git配置
-  getConfig: (repoName: string, key: string) => 
-    api.get(`/git/repositories/${repoName}/config`, { params: { key } }),
+  getRepositories: () => get<string[]>('/git/repositories'),
+  createRepository: (name: string, description?: string) =>
+    post<{ name: string; path: string }>('/git/repositories', { name, description }),
+  getRepositoryInfo: (repoName: string) =>
+    get<RepositoryInfo>(`/git/repositories/${repoName}`),
+  deleteRepository: (repoName: string) =>
+    del<{ message: string }>(`/git/repositories/${repoName}`),
+  getStatus: (repoName: string) =>
+    get<RepositoryInfo['status']>(`/git/repositories/${repoName}/status`),
+  getLog: (repoName: string, maxCount?: number) =>
+    get<GitLog>(`/git/repositories/${repoName}/log`, { params: { maxCount } }),
+  getFiles: (repoName: string, dirPath?: string) =>
+    get<FileItem[]>(`/git/repositories/${repoName}/files`, { params: { path: dirPath } }),
+  getFileContent: (repoName: string, filePath: string) =>
+    get<FileContentData>(`/git/repositories/${repoName}/file`, { params: { path: filePath } }),
+  getBranches: (repoName: string) =>
+    get<string[]>(`/git/repositories/${repoName}/branches`),
+  createBranch: (repoName: string, branchName: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/branches`, { branchName }),
+  switchBranch: (repoName: string, branchName: string) =>
+    put<{ message: string }>(`/git/repositories/${repoName}/branches/${branchName}`),
+  addFiles: (repoName: string, files: string[]) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/add`, { files }),
+  commit: (repoName: string, message: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/commit`, { message }),
+  cloneRepository: (url: string, name?: string) =>
+    post<{ path: string }>('/git/clone', { url, name }),
+  addRemote: (repoName: string, name: string, url: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/remotes`, { name, url }),
+  getRemotes: (repoName: string) =>
+    get<RemoteInfo[]>(`/git/repositories/${repoName}/remotes`),
+  push: (repoName: string, remote?: string, branch?: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/push`, { remote, branch }),
+  pull: (repoName: string, remote?: string, branch?: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/pull`, { remote, branch }),
+  quickPush: (repoName: string, message: string, remote?: string, branch?: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/quick-push`, { message, remote, branch }),
+  quickPull: (repoName: string, remote?: string, branch?: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/quick-pull`, { remote, branch }),
+  setConfig: (repoName: string, key: string, value: string) =>
+    post<{ message: string }>(`/git/repositories/${repoName}/config`, { key, value }),
+  getConfig: (repoName: string, key: string) =>
+    get<{ key: string; value: string }>(`/git/repositories/${repoName}/config`, { params: { key } }),
 };
 
-// 仓库相关API
 export const repositoryApi = {
-  // 获取仓库列表（带分页）
-  getRepositories: (page?: number, limit?: number) => 
-    api.get('/repository', { params: { page, limit } }),
-  
-  // 搜索仓库
-  searchRepositories: (query: string) => 
-    api.get('/repository/search', { params: { q: query } }),
-  
-  // 获取仓库统计信息
-  getStats: () => api.get('/repository/stats'),
+  getRepositories: (page?: number, limit?: number) =>
+    get<RepositoryListData>('/repository', { params: { page, limit } }),
+  searchRepositories: (query: string) =>
+    get<string[]>('/repository/search', { params: { q: query } }),
+  getStats: () => get<RepositoryStats>('/repository/stats'),
 };
 
 export default api;
