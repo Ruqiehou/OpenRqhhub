@@ -26,16 +26,14 @@ function collectBody(req: Request): Promise<Buffer> {
 /**
  * 执行 git http-backend 并返回结果
  */
-function resolveSmartHttpRepo(username: string, repo: string): { repoName: string; repoPath: string } | null {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(username) || !GitService.isValidRepositoryName(repo)) return null;
+function resolveSmartHttpRepo(repo: string): { repoName: string; repoPath: string } | null {
+  if (!GitService.isValidRepositoryName(repo)) return null;
 
-  const namespacedName = `${username}_${repo}`;
-  const repoName = fs.existsSync(path.join(REPOS_BASE, namespacedName)) ? namespacedName : repo;
-  const repoPath = path.resolve(REPOS_BASE, repoName);
+  const repoPath = path.resolve(REPOS_BASE, repo);
   const relativePath = path.relative(REPOS_BASE, repoPath);
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return null;
 
-  return { repoName, repoPath };
+  return { repoName: repo, repoPath };
 }
 
 function executeGitBackend(
@@ -45,7 +43,7 @@ function executeGitBackend(
   contentType: string | undefined,
   contentLength: string | undefined,
   body: Buffer
-): { status: number; headers: Record<string, string>; body: string | Buffer } {
+): { status: number; headers: Record<string, string>; body: Buffer } {
   
   // 构建 git http-backend 的环境变量
   const env: Record<string, string> = {
@@ -56,11 +54,15 @@ function executeGitBackend(
     GIT_PROJECT_ROOT: REPOS_BASE,
     GIT_HTTP_EXPORT_ALL: '1',
     CONTENT_TYPE: contentType || '',
-    CONTENT_LENGTH: contentLength || '0',
     SERVER_PROTOCOL: 'HTTP/1.1',
     SERVER_SOFTWARE: 'GitLocal/1.0',
     GIT_STRATEGY: 'recursive',
   };
+
+  // 仅当 contentLength 明确存在时才设置，避免把 undefined 转成 '0' 截断 push body
+  if (contentLength) {
+    env.CONTENT_LENGTH = contentLength;
+  }
 
   // 运行 git http-backend
   const result = spawnSync('git', ['http-backend'], {
@@ -72,15 +74,14 @@ function executeGitBackend(
 
   // 解析输出
   const stdout = result.stdout || Buffer.from('');
-  const stderr = result.stderr || Buffer.from('');
   
   if (result.error) {
-    return { status: 500, headers: {}, body: 'Internal Server Error' };
+    return { status: 500, headers: {}, body: Buffer.from('Internal Server Error') };
   }
 
-  // 解析头部和 body
-  const output = stdout.toString('utf-8');
-  const headerEndIndex = stdout.indexOf(Buffer.from('\r\n\r\n'));
+  // 在 Buffer 中查找头部结束位置
+  const CRLF = Buffer.from('\r\n\r\n');
+  const headerEndIndex = Buffer.indexOf(stdout, CRLF);
   
   if (headerEndIndex === -1) {
     // 没有头部，直接返回
@@ -88,7 +89,7 @@ function executeGitBackend(
   }
 
   const headerPart = stdout.slice(0, headerEndIndex).toString('utf-8');
-  const bodyPart = stdout.slice(headerEndIndex + 4); // +4 for \r\n\r\n
+  const bodyPart = stdout.slice(headerEndIndex + CRLF.length);
 
   // 解析状态码
   let status = 200;
@@ -119,7 +120,7 @@ function executeGitBackend(
  * GET /:username/:repo/info/refs?service=git-receive-pack (push)
  */
 router.get('/:username/:repo/info/refs', (req: Request, res: Response) => {
-  const resolved = resolveSmartHttpRepo(req.params.username as string, req.params.repo as string);
+  const resolved = resolveSmartHttpRepo(req.params.repo as string);
   if (!resolved) return res.status(400).send('Invalid repository path');
   const { repoName, repoPath } = resolved;
   
@@ -154,7 +155,7 @@ router.get('/:username/:repo/info/refs', (req: Request, res: Response) => {
  * POST /:username/:repo/git-receive-pack
  */
 router.post('/:username/:repo/git-receive-pack', async (req: Request, res: Response) => {
-  const resolved = resolveSmartHttpRepo(req.params.username as string, req.params.repo as string);
+  const resolved = resolveSmartHttpRepo(req.params.repo as string);
   if (!resolved) return res.status(400).send('Invalid repository path');
   const { repoName, repoPath } = resolved;
   
@@ -170,7 +171,7 @@ router.post('/:username/:repo/git-receive-pack', async (req: Request, res: Respo
     pathInfo,
     '',
     req.headers['content-type'] as string || 'application/x-git-receive-pack-request',
-    req.headers['content-length'] as string,
+    req.headers['content-length'] as string | undefined,
     bodyBuffer
   );
 
@@ -186,7 +187,7 @@ router.post('/:username/:repo/git-receive-pack', async (req: Request, res: Respo
  * POST /:username/:repo/git-upload-pack
  */
 router.post('/:username/:repo/git-upload-pack', async (req: Request, res: Response) => {
-  const resolved = resolveSmartHttpRepo(req.params.username as string, req.params.repo as string);
+  const resolved = resolveSmartHttpRepo(req.params.repo as string);
   if (!resolved) return res.status(400).send('Invalid repository path');
   const { repoName, repoPath } = resolved;
   
@@ -202,7 +203,7 @@ router.post('/:username/:repo/git-upload-pack', async (req: Request, res: Respon
     pathInfo,
     '',
     req.headers['content-type'] as string || 'application/x-git-upload-pack-request',
-    req.headers['content-length'] as string,
+    req.headers['content-length'] as string | undefined,
     bodyBuffer
   );
 

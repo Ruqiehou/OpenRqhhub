@@ -1,7 +1,7 @@
 import simpleGit, { StatusResult, LogResult } from 'simple-git';
 import path from 'path';
 import fs from 'fs';
-import { execSync, type ExecSyncOptionsWithStringEncoding } from 'child_process';
+import { execFileSync, type ExecSyncOptionsWithStringEncoding } from 'child_process';
 import RepositoryModel from '../models/repository';
 
 export class HttpError extends Error {
@@ -91,7 +91,7 @@ export class GitService {
   private gitExec(cwd: string, args: string[], stdin?: string): string {
     const opts: ExecSyncOptionsWithStringEncoding = { cwd, encoding: 'utf-8' };
     if (stdin !== undefined) opts.input = stdin;
-    return execSync(`git ${args.map(a => `"${a}"`).join(' ')}`, opts).toString().trim();
+    return execFileSync('git', args, opts).toString().trim();
   }
 
   /** 创建 bare 仓库 */
@@ -179,7 +179,7 @@ export class GitService {
   /** 获取分支列表 */
   async getBranches(repoName: string): Promise<string[]> {
     const git = simpleGit(this.getRepoPath(repoName));
-    const branches = await git.branchLocal();
+    const branches = await git.branch();
     const repo = RepositoryModel.findByName(repoName);
     if (repo) {
       for (const b of branches.all) RepositoryModel.addBranch(repo.id, b, b === branches.current);
@@ -235,7 +235,7 @@ export class GitService {
   async getRepositoryInfo(repoName: string): Promise<RepositoryInfo> {
     const repoPath = this.getRepoPath(repoName);
     const git = simpleGit(repoPath);
-    const [log, branches] = await Promise.all([git.log({ maxCount: 10 }), git.branchLocal()]);
+    const [log, branches] = await Promise.all([git.log({ maxCount: 10 }), git.branch()]);
     const dbRecord = RepositoryModel.findByName(repoName);
     if (dbRecord) {
       for (const b of branches.all) RepositoryModel.addBranch(dbRecord.id, b, b === branches.current);
@@ -277,7 +277,7 @@ export class GitService {
     const repoPath = this.getRepoPath(repoName);
     try {
       const git = simpleGit(repoPath);
-      const branches = await git.branchLocal();
+      const branches = await git.branch();
       const log = await git.log({ maxCount: 1 });
       const repo = RepositoryModel.create({ name: repoName, path: repoPath, default_branch: branches.current || 'master' });
       for (const b of branches.all) RepositoryModel.addBranch(repo.id, b, b === branches.current);
@@ -304,7 +304,7 @@ export class GitService {
     await git.clone(url, repoPath, ['--bare']);
 
     const localGit = simpleGit(repoPath);
-    const branches = await localGit.branchLocal();
+    const branches = await localGit.branch();
     const log = await localGit.log({ maxCount: 1 });
     const repo = RepositoryModel.create({ name, path: repoPath, remote_url: url, default_branch: branches.current || 'master' });
     for (const b of branches.all) RepositoryModel.addBranch(repo.id, b, b === branches.current);
