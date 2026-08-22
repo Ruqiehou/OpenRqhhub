@@ -81,7 +81,7 @@ function executeGitBackend(
 
   // 在 Buffer 中查找头部结束位置
   const CRLF = Buffer.from('\r\n\r\n');
-  const headerEndIndex = Buffer.indexOf(stdout, CRLF);
+  const headerEndIndex = stdout.indexOf(CRLF);
   
   if (headerEndIndex === -1) {
     // 没有头部，直接返回
