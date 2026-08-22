@@ -1,22 +1,25 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "gitlocal",
+  "productName": "GitLocal",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.gitlocal.app",
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev:frontend",
-    "beforeBuildCommand": "npm run build:frontend"
+    "beforeDevCommand": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
       {
-        "title": "GitLocal",
-        "width": 800,
-        "height": 600,
+        "title": "GitLocal - 本地Git托管平台",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
@@ -33,6 +36,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "../backend/dist/**"
+    ],
+    "externalBin": [],
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
