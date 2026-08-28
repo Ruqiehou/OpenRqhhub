@@ -193,18 +193,39 @@ export class GitService {
     catch { return 'master'; }
   }
 
-  /** 创建分支 */
+  /** 分支名校验（防止以 - 开头被解析为选项或注入） */
+  static isValidBranchName(branchName: string): boolean {
+    return /^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$/.test(branchName) &&
+      !branchName.includes('..') &&
+      !branchName.startsWith('-') &&
+      !branchName.endsWith('.lock');
+  }
+
+  private assertBranchName(branchName: string): void {
+    if (!GitService.isValidBranchName(branchName)) {
+      throw new HttpError(400, '分支名称不合法');
+    }
+  }
+
+  /** 创建分支（bare 仓库用 plumbing：git branch） */
   async createBranch(repoName: string, branchName: string): Promise<void> {
-    const git = simpleGit(this.getRepoPath(repoName));
-    await git.checkoutLocalBranch(branchName);
+    this.assertBranchName(branchName);
+    const repoPath = this.getRepoPath(repoName);
+    // bare 仓库没有工作区，不能 checkout，直接从当前 HEAD 创建分支
+    this.gitExec(repoPath, ['branch', branchName]);
     const repo = RepositoryModel.findByName(repoName);
     if (repo) RepositoryModel.addBranch(repo.id, branchName);
   }
 
-  /** 切换分支 */
+  /** 切换分支（bare 仓库修改 HEAD 符号引用） */
   async switchBranch(repoName: string, branchName: string): Promise<void> {
-    const git = simpleGit(this.getRepoPath(repoName));
-    await git.checkout(branchName);
+    this.assertBranchName(branchName);
+    const repoPath = this.getRepoPath(repoName);
+    const ref = 'refs/heads/' + branchName;
+    // 校验分支存在，避免把 HEAD 指向不存在的 ref
+    try { this.gitExec(repoPath, ['show-ref', '--verify', ref]); }
+    catch { throw new HttpError(404, '分支 ' + branchName + ' 不存在'); }
+    this.gitExec(repoPath, ['symbolic-ref', 'HEAD', ref]);
   }
 
   /** add 文件（bare 仓库用 plumbing） */
