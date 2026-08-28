@@ -357,11 +357,24 @@ export class GitService {
     if (branch) await git.push(remote, branch); else await git.push(remote);
   }
 
-  /** 拉取 */
+  /** 拉取（bare 仓库用 fetch + 快进合并到本地分支） */
   async pull(repoName: string, remote: string = 'origin', branch?: string): Promise<void> {
-    const git = simpleGit(this.getRepoPath(repoName));
-    if (branch) await git.pull(remote, branch); else await git.pull(remote);
-    const log = await git.log({ maxCount: 10 });
+    const repoPath = this.getRepoPath(repoName);
+    const target = branch || await this.getCurrentBranch(repoName);
+    this.assertBranchName(target);
+    // fetch 到 FETCH_HEAD，再用 merge-base 校验快进而后 update-ref
+    this.gitExec(repoPath, ['fetch', remote, target]);
+    const fetchHead = this.gitExec(repoPath, ['rev-parse', 'FETCH_HEAD']);
+    const localRef = 'refs/heads/' + target;
+    let localHead = '';
+    try { localHead = this.gitExec(repoPath, ['rev-parse', localRef]); } catch { /* 本地尚无该分支 */ }
+    if (localHead) {
+      try { this.gitExec(repoPath, ['merge-base', '--is-ancestor', localHead, fetchHead]); }
+      catch { throw new HttpError(409, '远程分支存在分叉，无法快进合并'); }
+      if (localHead === fetchHead) return; // 已是最新
+    }
+    this.gitExec(repoPath, ['update-ref', localRef, fetchHead]);
+    const log = await simpleGit(repoPath).log({ maxCount: 10 });
     this.syncCommitsToDb(repoName, log.all).catch(() => {});
   }
 
@@ -392,10 +405,7 @@ export class GitService {
 
   /** 快速拉取 */
   async quickPullAndMerge(repoName: string, remote: string = 'origin', branch?: string): Promise<void> {
-    const git = simpleGit(this.getRepoPath(repoName));
-    if (branch) await git.pull(remote, branch); else await git.pull(remote);
-    const log = await git.log({ maxCount: 10 });
-    this.syncCommitsToDb(repoName, log.all).catch(() => {});
+    await this.pull(repoName, remote, branch);
   }
 
   /** 统计信息 */
